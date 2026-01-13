@@ -1,0 +1,8 @@
+{
+    "bot_token": "TOKEN_AQUI",
+    "api_id": 12345678,
+    "api_hash": "0123456789abcdef0123456789abcdef",
+    "admin_ids": [987654321, 123456789, 555666777],
+    "messages_per_minute": 20,
+    "log_file": "bot.log"
+}
