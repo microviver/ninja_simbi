@@ -40,30 +40,27 @@ API_ID = config["api_id"]
 API_HASH = config["api_hash"]
 ADMIN_IDS = config["admin_ids"]
 
-MESSAGES_PER_MINUTE = config.get("messages_per_minute", 20)  # límite de envíos por minuto
+MESSAGES_PER_MINUTE = config.get("messages_per_minute", 20)
 LOG_FILE = config.get("log_file", "bot.log")
 
 
 # ============================================================
-# LOGGING AVANZADO (ficheiro + consola)
+# LOGGING AVANZADO
 # ============================================================
 
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.INFO)
 
-# Formato
 formatter = logging.Formatter(
     "%(asctime)s - %(name)s - %(levelname)s - %(message)s",
     datefmt="%Y-%m-%d %H:%M:%S"
 )
 
-# Consola
 ch = logging.StreamHandler()
 ch.setLevel(logging.INFO)
 ch.setFormatter(formatter)
 logger.addHandler(ch)
 
-# Ficheiro
 fh = logging.FileHandler(LOG_FILE, encoding="utf-8")
 fh.setLevel(logging.INFO)
 fh.setFormatter(formatter)
@@ -81,7 +78,7 @@ STATS = {
     "total_sent": 0,
     "total_failed": 0,
     "total_blocked": 0,
-    "last_campaign": None,  # dict con info de la última campaña
+    "last_campaign": None,
 }
 
 
@@ -90,15 +87,21 @@ STATS = {
 # ============================================================
 
 def is_admin(user_id: int) -> bool:
-    """Comprueba si el usuario está autorizado a usar el bot."""
     return user_id in ADMIN_IDS
 
 
 def get_rate_limit_delay() -> float:
-    """Devuelve el delay entre mensajes para respetar el límite por minuto."""
     if MESSAGES_PER_MINUTE <= 0:
         return 0.0
     return 60.0 / MESSAGES_PER_MINUTE
+
+
+async def safe_reply_text(message, text, **kwargs):
+    """Evita errores de Markdown escapando o desactivando el parse_mode."""
+    try:
+        await message.reply_text(text, **kwargs)
+    except Exception:
+        await message.reply_text(text)
 
 
 # ============================================================
@@ -128,7 +131,6 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 
 async def myid(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Devuelve el ID del usuario."""
     user_id = update.effective_user.id
     await update.message.reply_text(f"🆔 Tu ID es: `{user_id}`", parse_mode="Markdown")
 
@@ -144,7 +146,6 @@ async def cancel_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 
 async def admin_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Abre el panel de administración con /admin."""
     user_id = update.effective_user.id
 
     if not is_admin(user_id):
@@ -181,7 +182,6 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     data = query.data
 
-    # Iniciar campaña
     if data == "start_campaign":
         USER_STATE[user_id] = {"step": "awaiting_channel"}
 
@@ -195,21 +195,18 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
             parse_mode="Markdown"
         )
 
-    # Ayuda
     elif data == "help":
         await query.edit_message_text(
             "ℹ️ *Cómo usar el bot*\n\n"
             "1️⃣ Pulsa *Iniciar campaña*\n"
             "2️⃣ Envía el canal o grupo\n"
             "3️⃣ Espera a que se extraigan los miembros\n"
-            "4️⃣ Envía el mensaje que quieras reenviar (texto, foto, vídeo, botones...)\n"
+            "4️⃣ Envía el mensaje que quieras reenviar\n"
             "5️⃣ Confirma el envío\n\n"
-            "El mensaje se copiará tal cual a cada usuario.\n\n"
             "Usa /start para volver al menú.",
             parse_mode="Markdown"
         )
 
-    # Panel admin
     elif data == "admin_panel":
         keyboard = [
             [InlineKeyboardButton("🚀 Iniciar campaña", callback_data="start_campaign")],
@@ -223,7 +220,6 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
             parse_mode="Markdown"
         )
 
-    # Mostrar estadísticas
     elif data == "show_stats":
         last = STATS["last_campaign"]
         if last:
@@ -239,27 +235,25 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
         else:
             last_text = "No hay campañas anteriores."
 
-        text = (
+        await query.edit_message_text(
             "📊 *Estadísticas generales*\n\n"
             f"Campañas totales: {STATS['total_campaigns']}\n"
             f"Mensajes enviados: {STATS['total_sent']}\n"
             f"Bloqueados: {STATS['total_blocked']}\n"
             f"Errores: {STATS['total_failed']}\n\n"
-            f"{last_text}"
+            f"{last_text}",
+            parse_mode="Markdown"
         )
-        await query.edit_message_text(text, parse_mode="Markdown")
 
-    # Mostrar configuración
     elif data == "show_config":
-        text = (
+        await query.edit_message_text(
             "⚙️ *Configuración actual*\n\n"
             f"Mensajes por minuto: {MESSAGES_PER_MINUTE}\n"
             f"Archivo de log: `{LOG_FILE}`\n"
-            f"Admins: {', '.join([str(i) for i in ADMIN_IDS])}\n"
+            f"Admins: {', '.join([str(i) for i in ADMIN_IDS])}\n",
+            parse_mode="Markdown"
         )
-        await query.edit_message_text(text, parse_mode="Markdown")
 
-    # Confirmar envío
     elif data == "confirm_send":
         user_data = USER_STATE.get(user_id, {})
         members = user_data.get("members", [])
@@ -271,7 +265,10 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
             await query.edit_message_text("❌ Faltan datos para enviar la campaña.")
             return
 
-        await query.edit_message_text("📤 *Empezando a enviar mensajes...*\n\nEsto puede tardar un poco.", parse_mode="Markdown")
+        await query.edit_message_text(
+            "📤 *Empezando a enviar mensajes...*\n\nEsto puede tardar un poco.",
+            parse_mode="Markdown"
+        )
 
         success = 0
         failed = 0
@@ -292,12 +289,10 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 if success % 20 == 0:
                     try:
                         await query.edit_message_text(
-                            f"📤 *Enviando mensajes...*\n\n"
-                            f"Progreso: {success}/{len(members)}",
+                            f"📤 *Enviando mensajes...*\n\nProgreso: {success}/{len(members)}",
                             parse_mode="Markdown"
                         )
                     except Exception:
-                        # Por si el mensaje ya no se puede editar
                         pass
 
                 if delay > 0:
@@ -311,7 +306,6 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
                     failed += 1
                 logger.error(f"Error enviando a {member_id}: {e}")
 
-        # Actualizar estadísticas globales
         STATS["total_campaigns"] += 1
         STATS["total_sent"] += success
         STATS["total_failed"] += failed
@@ -343,7 +337,6 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
             f"enviados={success}, bloqueados={blocked}, errores={failed}"
         )
 
-    # Cancelar
     elif data == "cancel":
         if user_id in USER_STATE:
             del USER_STATE[user_id]
@@ -351,7 +344,7 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 
 # ============================================================
-# RECEPCIÓN DE MENSAJES (canal/grupo + mensaje de campaña)
+# RECEPCIÓN DE MENSAJES
 # ============================================================
 
 async def receive_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -365,7 +358,6 @@ async def receive_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     state = USER_STATE[user_id]
 
-    # Paso 1 — Recibir canal o grupo
     if state.get("step") == "awaiting_channel":
         channel_input = update.message.text.strip()
 
@@ -385,11 +377,9 @@ async def receive_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
                     chat = await client.get_entity(int(channel_input))
             except Exception as e:
                 await client.disconnect()
-                await update.message.reply_text(
-                    f"❌ *No pude acceder al chat*\n\n"
-                    f"Comprueba que el ID/usuario es correcto y que el bot es admin.\n\n"
-                    f"Error: {str(e)}",
-                    parse_mode="Markdown"
+                await safe_reply_text(
+                    update.message,
+                    f"❌ No pude acceder al chat\n\nError: {str(e)}"
                 )
                 del USER_STATE[user_id]
                 return
@@ -422,9 +412,8 @@ async def receive_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
             if len(real_users) == 0:
                 await update.message.reply_text(
-                    "❌ *No encontré miembros reales en este chat.*\n\n"
-                    "Comprueba que tiene miembros y que el bot tiene permisos.",
-                    parse_mode="Markdown"
+                    "❌ No encontré miembros reales en este chat.\n\n"
+                    "Comprueba que tiene miembros y que el bot tiene permisos."
                 )
                 del USER_STATE[user_id]
                 return
@@ -444,28 +433,20 @@ async def receive_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 f"✅ *Miembros extraídos*\n\n"
                 f"📢 Chat: {USER_STATE[user_id]['chat_name']}\n"
                 f"👥 Total: *{len(real_users)}*\n\n"
-                f"Ahora envíame el mensaje de la campaña.\n"
-                f"Puede ser texto, foto, vídeo, documento, botones, etc.\n\n"
-                f"Escribe /cancelar para parar.",
+                f"Ahora envíame el mensaje de la campaña.",
                 parse_mode="Markdown"
             )
 
         except Exception as e:
             logger.error(f"Error extrayendo miembros: {e}")
-            await update.message.reply_text(
-                f"❌ *Error extrayendo miembros*\n\n"
-                f"Detalles: {str(e)}",
-                parse_mode="Markdown"
-            )
+            await safe_reply_text(update.message, f"❌ Error extrayendo miembros\n\nDetalles: {str(e)}")
             if user_id in USER_STATE:
                 del USER_STATE[user_id]
 
-    # Paso 2 — Recibir mensaje de campaña (cualquier tipo)
     elif state.get("step") == "awaiting_message":
         msg = update.message
         members_count = len(state.get("members", []))
 
-        # Guardamos sólo la referencia al mensaje original
         USER_STATE[user_id]["from_chat_id"] = msg.chat_id
         USER_STATE[user_id]["message_id"] = msg.message_id
         USER_STATE[user_id]["step"] = "ready_to_send"
@@ -475,13 +456,10 @@ async def receive_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
             [InlineKeyboardButton("❌ Cancelar", callback_data="cancel")]
         ]
 
-        # Modo de previsualización "seguro":
-        # el usuario ve el mensaje REAL que acaba de enviar (con su media/botones),
-        # y debajo enviamos un resumen + confirmación
         await msg.reply_text(
             f"📋 *Vista previa de la campaña*\n\n"
             f"👥 Miembros que recibirán el mensaje: *{members_count}*\n\n"
-            f"Este es el mensaje que se enviará a cada uno (el que acabas de mandar).\n\n"
+            f"Este es el mensaje que se enviará a cada uno.\n\n"
             f"¿Quieres seguir adelante?",
             reply_markup=InlineKeyboardMarkup(keyboard),
             parse_mode="Markdown"
@@ -507,7 +485,6 @@ def main():
     app.add_handler(CommandHandler("admin", admin_command))
     app.add_handler(CallbackQueryHandler(button_callback))
 
-    # Cualquier mensaje de texto o media, siempre que no sea comando
     app.add_handler(MessageHandler(
         (filters.ALL & ~filters.COMMAND),
         receive_message
