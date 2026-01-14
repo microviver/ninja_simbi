@@ -3,6 +3,6 @@
     "api_id": 34874431,
     "api_hash": "8a282a4dd5ee9de9905f73d0adbbb421",
     "admin_ids": [565532150, 7743367116],
-    "messages_per_minute": 20,
+    "messages_per_minute": 2000,
     "log_file": "bot.log"
 }
