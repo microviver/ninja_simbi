@@ -103,6 +103,24 @@ async def safe_reply_text(message, text, **kwargs):
         await message.reply_text(text)
 
 
+def detect_media_type(msg):
+    if msg.text:
+        return msg.text
+    if msg.photo:
+        return "[Foto]"
+    if msg.video:
+        return "[Video]"
+    if msg.document:
+        return "[Documento]"
+    if msg.audio:
+        return "[Audio]"
+    if msg.voice:
+        return "[Nota de voz]"
+    if msg.sticker:
+        return "[Sticker]"
+    return "[Mensaje multimedia]"
+
+
 # ============================================================
 # COMANDOS
 # ============================================================
@@ -134,7 +152,6 @@ async def myid(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text(f"🆔 Tu ID es: `{user_id}`", parse_mode="Markdown")
 
 
-# ✅ NOVO COMANDO: OBTÉM O ID DO CANAL/GRUPO
 async def getchatid(update: Update, context: ContextTypes.DEFAULT_TYPE):
     chat = update.effective_chat
     chat_id = chat.id
@@ -245,6 +262,7 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 f"- Bloqueados: {last.get('blocked')}\n"
                 f"- Errores: {last.get('failed')}\n"
                 f"- Fecha: {last.get('timestamp')}\n"
+                f"- Mensaje: {last.get('message_preview')}\n"
             )
         else:
             last_text = "No hay campañas anteriores."
@@ -300,15 +318,6 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 )
                 success += 1
 
-                if success % 20 == 0:
-                    try:
-                        await query.edit_message_text(
-                            f"📤 *Enviando mensajes...*\n\nProgreso: {success}/{len(members)}",
-                            parse_mode="Markdown"
-                        )
-                    except Exception:
-                        pass
-
                 if delay > 0:
                     await asyncio.sleep(delay)
 
@@ -320,6 +329,13 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
                     failed += 1
                 logger.error(f"Error enviando a {member_id}: {e}")
 
+        # Obtener mensaje original para estadísticas
+        try:
+            original = await context.bot.get_message(from_chat_id, message_id)
+            message_preview = detect_media_type(original)
+        except Exception:
+            message_preview = "[No se pudo obtener el mensaje]"
+
         STATS["total_campaigns"] += 1
         STATS["total_sent"] += success
         STATS["total_failed"] += failed
@@ -330,7 +346,8 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
             "sent": success,
             "failed": failed,
             "blocked": blocked,
-            "timestamp": datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+            "timestamp": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+            "message_preview": message_preview
         }
 
         USER_STATE[user_id] = {}
@@ -389,11 +406,13 @@ async def receive_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
                     chat = await client.get_entity(channel_input)
                 else:
                     chat = await client.get_entity(int(channel_input))
-            except Exception as e:
+            except Exception:
                 await client.disconnect()
                 await safe_reply_text(
                     update.message,
-                    f"❌ No pude acceder al chat\n\nError: {str(e)}"
+                    "❌ No pude acceder al chat.\n\n"
+                    "Verifica que el ID o @usuario sea correcto y que el bot tenga acceso.\n"
+                    "Si es un grupo privado, asegúrate de que el bot esté dentro."
                 )
                 del USER_STATE[user_id]
                 return
@@ -453,7 +472,7 @@ async def receive_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
         except Exception as e:
             logger.error(f"Error extrayendo miembros: {e}")
-            await safe_reply_text(update.message, f"❌ Error extrayendo miembros\n\nDetalles: {str(e)}")
+            await safe_reply_text(update.message, "❌ Error extrayendo miembros.\n\nInténtalo de nuevo más tarde.")
             if user_id in USER_STATE:
                 del USER_STATE[user_id]
 
@@ -495,7 +514,7 @@ def main():
 
     app.add_handler(CommandHandler("start", start))
     app.add_handler(CommandHandler("myid", myid))
-    app.add_handler(CommandHandler("getchatid", getchatid))  # ← NOVO COMANDO
+    app.add_handler(CommandHandler("getchatid", getchatid))
     app.add_handler(CommandHandler("cancelar", cancel_command))
     app.add_handler(CommandHandler("admin", admin_command))
     app.add_handler(CallbackQueryHandler(button_callback))
