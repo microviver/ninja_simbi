@@ -97,7 +97,6 @@ def get_rate_limit_delay() -> float:
 
 
 async def safe_reply_text(message, text, **kwargs):
-    """Evita errores de Markdown escapando o desactivando el parse_mode."""
     try:
         await message.reply_text(text, **kwargs)
     except Exception:
@@ -133,6 +132,21 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
 async def myid(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = update.effective_user.id
     await update.message.reply_text(f"🆔 Tu ID es: `{user_id}`", parse_mode="Markdown")
+
+
+# ✅ NOVO COMANDO: OBTÉM O ID DO CANAL/GRUPO
+async def getchatid(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    chat = update.effective_chat
+    chat_id = chat.id
+    chat_title = chat.title or "Privado"
+    chat_type = chat.type
+
+    await update.message.reply_text(
+        f"🆔 *Chat ID:* `{chat_id}`\n"
+        f"📛 *Nombre:* {chat_title}\n"
+        f"📦 *Tipo:* {chat_type}",
+        parse_mode="Markdown"
+    )
 
 
 async def cancel_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -481,6 +495,7 @@ def main():
 
     app.add_handler(CommandHandler("start", start))
     app.add_handler(CommandHandler("myid", myid))
+    app.add_handler(CommandHandler("getchatid", getchatid))  # ← NOVO COMANDO
     app.add_handler(CommandHandler("cancelar", cancel_command))
     app.add_handler(CommandHandler("admin", admin_command))
     app.add_handler(CallbackQueryHandler(button_callback))
